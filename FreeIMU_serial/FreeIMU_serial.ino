@@ -12,6 +12,7 @@
 #include <EEPROM.h>
 #include <FlexiTimer2.h>
 #include <AverageList.h>
+#include <PString.h>
 
 //#define DEBUG
 #include "DebugUtils.h"
@@ -209,10 +210,9 @@ void loop() {
           Serial.print("MGH:");
           float h = degrees(mghList.getTotalAverage());
           if(h<0.0){
-            Serial.print(360.0+h);
-          }else{
-            Serial.print(h);
+            h=(360.0+h);
           }
+          Serial.print(h);
           Serial.print(",YAW:");
           Serial.print(degrees(yprm[0]));
           Serial.print(",PCH:");
@@ -220,11 +220,55 @@ void loop() {
           Serial.print(",RLL:");
           Serial.print(degrees(yprm[2]));
           Serial.println("***");
-          
+          //now do the NMEA version
+         
+            printNmeaMag(h);
+
         }
         execute = false;
   }
     
+  
+}
+/*
+ Print out the NMEA string for mag heading
+ $HC = mag compass
+            === HDM - Heading - Magnetic ===
+
+            Vessel heading in degrees with respect to magnetic north produced by
+            any device or system producing magnetic heading.
+            
+            ------------------------------------------------------------------------------
+                    1   2 3
+                    |   | |
+             $--HDM,x.x,M*hh<CR><LF>
+            ------------------------------------------------------------------------------
+            
+            Field Number: 
+            
+            1. Heading Degrees, magnetic
+            2. M = magnetic
+            3. Checksum
+            
+*/
+void printNmeaMag(float h){
+    //Assemble a sentence of the various parts so that we can calculate the proper checksum
+    char magSentence [30];
+
+	PString str(magSentence, sizeof(magSentence));
+	str.print("$HCHDM,");
+
+	str.print((int)h); //prints 1 decimal, but round to degree, should be good enough
+	str.print(".0,M*");
+	
+	//calculate the checksum
+
+	int cs = 0; //clear any old checksum
+	for (unsigned int n = 1; n < strlen(magSentence) - 1; n++) {
+		cs ^= magSentence[n]; //calculates the checksum
+	}
+	str.print(cs, HEX); // Assemble the final message and send it out the serial port
+	Serial.println(magSentence);
   
 }
 
