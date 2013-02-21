@@ -105,7 +105,7 @@ void loop() {
           Serial.print(degrees(yprm[1]));
           Serial.print(",RLL:");
           Serial.print(degrees(yprm[2]));
-          Serial.println("***");
+          Serial.println(",");
           //now do the NMEA version
          
             printNmeaMag(h);
