@@ -1,5 +1,8 @@
 /**
  * FreeIMU library serial communication protocol
+ * TODO: ROT 
+ * Vessels Attitude ($xxXDR or $xxNTHPR) would be a great bonus!"
+ *
 */
 
 #include <ADXL345.h>
@@ -36,6 +39,11 @@ typedef volatile float rval; //change float to the datatype you want to use
 const byte MAX_NUMBER_OF_READINGS = 5;
 rval mghStorage[MAX_NUMBER_OF_READINGS] = {0.0};
 AverageList<rval> mghList = AverageList<rval>( mghStorage, MAX_NUMBER_OF_READINGS );
+
+// rate of turn average
+rval rotStorage[MAX_NUMBER_OF_READINGS] = {0.0};
+AverageList<rval> rotList = AverageList<rval>( rotStorage, MAX_NUMBER_OF_READINGS);
+
 
 // Set the FreeIMU object
 FreeIMU my3IMU = FreeIMU();
@@ -84,20 +92,36 @@ void loop() {
           my3IMU.getYawPitchRollRad(yprm);
           //convert to magnetic heading
           calcMagHeading();
+          updateROT();
           mghList.addValue(yprm[3]);
     }
     if (interval % 5 == 0) {
 	//do every 500ms
-
-         //ArduIMU output format
-         //!!!VER:1.9,RLL:-0.52,PCH:0.06,YAW:80.24,IMUH:253,MGX:44,MGY:-254,MGZ:-257,MGH:80.11,LAT:-412937350,LON:1732472000,ALT:14,COG:116,SOG:0,FIX:1,SAT:5,TOW:22504700***
- 
-          Serial.print("!!!VER:1.9,UID:IMU,");
-          Serial.print("MGH:");
-          float h = degrees(mghList.getTotalAverage());
+         float h = degrees(mghList.getTotalAverage());
           if(h<0.0){
             h=(360.0+h);
           }
+         //ArduIMU output format
+        printIMU(h);
+          //now do the NMEA version
+         
+          printNmeaMag(h);
+           printRateOfTurn();
+        }
+        
+        execute = false;
+  }
+   
+    
+  
+}
+
+void printIMU(float h){
+  //!!!VER:1.9,RLL:-0.52,PCH:0.06,YAW:80.24,IMUH:253,MGX:44,MGY:-254,MGZ:-257,MGH:80.11,LAT:-412937350,LON:1732472000,ALT:14,COG:116,SOG:0,FIX:1,SAT:5,TOW:22504700***
+         
+          Serial.print("!!!VER:1.9,UID:IMU,");
+          Serial.print("MGH:");
+          
           Serial.print(h);
           Serial.print(",YAW:");
           Serial.print(degrees(yprm[0]));
@@ -105,17 +129,52 @@ void loop() {
           Serial.print(degrees(yprm[1]));
           Serial.print(",RLL:");
           Serial.print(degrees(yprm[2]));
-          Serial.println(",");
-          //now do the NMEA version
-         
-            printNmeaMag(h);
-
-        }
-        execute = false;
-  }
-    
+          Serial.println(","); 
   
 }
+/*
+
+
+        1   2 3
+        |   | |
+ $--ROT,x.x,A*hh<CR><LF>
+
+Field Number:
+
+    Rate Of Turn, degrees per minute, "-" means bow turns to port
+
+    Status, A means data is valid
+
+    Checksum
+   */
+   
+void printRateOfTurn(){
+  
+   char rotSentence [25];
+
+	PString str(rotSentence, sizeof(rotSentence));
+	str.print("$FBROT,");
+
+	str.print(rotList.getTotalAverage()); //prints 1 decimal, but round to degree, should be good enough
+	str.print(",A*");
+	
+	//calculate the checksum
+
+	int cs = 0; //clear any old checksum
+	for (unsigned int n = 1; n < strlen(rotSentence) - 1; n++) {
+		cs ^= rotSentence[n]; //calculates the checksum
+	}
+	str.print(cs, HEX); // Assemble the final message and send it out the serial port
+	Serial.println(rotSentence);
+        //val[] 3,4,5
+         //Serial.print(",gyrox:");
+         // Serial.print(degrees(val[3]));
+          //Serial.print(",gyroy:");
+          //Serial.print(degrees(val[4]));
+          //Serial.print(",gyroz:");
+          //Serial.println(degrees(val[5])*0.06097);
+}
+   
 /*
  Print out the NMEA string for mag heading
  $HC = mag compass
@@ -142,7 +201,7 @@ void printNmeaMag(float h){
     char magSentence [30];
 
 	PString str(magSentence, sizeof(magSentence));
-	str.print("$HCHDM,");
+	str.print("$FBHDM,");
 
 	str.print((int)h); //prints 1 decimal, but round to degree, should be good enough
 	str.print(".0,M*");
@@ -156,6 +215,14 @@ void printNmeaMag(float h){
 	str.print(cs, HEX); // Assemble the final message and send it out the serial port
 	Serial.println(magSentence);
   
+}
+
+
+void updateROT(){
+  //executed every 0.2 secs
+     //value is deg/s
+     float rot=(val[5]*0.06097);
+     rotList.addValue(-degrees(rot));
 }
 
 void calcMagHeading(){
