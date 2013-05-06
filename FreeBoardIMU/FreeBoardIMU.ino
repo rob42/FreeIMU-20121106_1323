@@ -134,7 +134,8 @@ void loop() {
           //now do the NMEA version
          
           printNmeaMag(h);
-           printRateOfTurn();
+          printRateOfTurn();
+          printPitchRoll();
         }
         
         execute = false;
@@ -228,7 +229,7 @@ void printRateOfTurn(){
 	PString str(rotSentence, sizeof(rotSentence));
 	str.print("$TIROT,");
         float r =rotList.getTotalAverage();
-        char rBuf[5];
+        char rBuf[7];
         dtostrf(r, 3, 1, rBuf);
 	str.print(rBuf); //prints 1 decimal, but round to degree, should be good enough
 	str.print(",A*");
@@ -241,13 +242,7 @@ void printRateOfTurn(){
 	}
 	str.print(cs, HEX); // Assemble the final message and send it out the serial port
 	Serial.println(rotSentence);
-        //val[] 3,4,5
-         //Serial.print(",gyrox:");
-         // Serial.print(degrees(val[3]));
-          //Serial.print(",gyroy:");
-          //Serial.print(degrees(val[4]));
-          //Serial.print(",gyroz:");
-          //Serial.println(degrees(val[5])*0.06097);
+       
 }
    
 /*
@@ -296,7 +291,7 @@ void printNmeaMag(float h){
                 PString str(hdtSentence, sizeof(hdtSentence));
         	str.print("$HCHDT,");
                 float d = h-declination;
-                char dBuf[5];
+                char dBuf[7];
                 dtostrf(d, 3, 1, dBuf);
         	str.print(dBuf); 
         	str.print(",T*");
@@ -330,7 +325,7 @@ void printNmeaMag(float h){
                 */
                 char hdgSentence [30];
                 float x = (abs(declination));
-                char xBuf[5];
+                char xBuf[7];
                 dtostrf(x, 3, 1, xBuf);
                 //x=((int)(x*10))*0.1;
                 PString hdgStr(hdgSentence, sizeof(hdgSentence));
@@ -363,6 +358,52 @@ void printNmeaMag(float h){
 
   
 }
+/*
+$YXXDR (Transducer Measurements: Vessel Attitude) Used for various secondary transducers?!
+or $PTNTHPR (Heading, Pitch, Roll) Looks like a new specific attitude one from the digital camera world as apparently EXIF tags also contain NMEA strings.
+
+
+$YXXDR,<1>, <2>, <3>, <4>,<5>, <6>, <7>, <8>,<9>, <10>,<11>,<12>,<13>,<14>,<15>,<16>*hh<CR><LF> 
+eg $YXXDR,A,5.2,D,PTCH,A,7.4,D,ROLL,,,,,,,,*hh<CR><LF>
+
+The fields in the B version of the XDR sentence are as follows:
+<1>A = angular displacement
+<2>Pitch: oscillation of vessel about its latitudinal axis. Bow moving up ispositive. Value reported to the nearest 0.1 degree.
+<3>D = degrees
+<4>PTCH (ID indicating pitch of vessel)
+<5>A = angular displacement
+<6>Roll: oscillation of vessel about its longitudinal axis. Roll to the starboard is positive. Value reported to the nearest 0.1 degree.
+<7>D = degrees
+<8>ROLL (ID indicating roll of vessel)
+<9>+Not used
+*/
+void printPitchRoll(){
+  
+   char xdrSentence [46];
+
+	PString str(xdrSentence, sizeof(xdrSentence));
+	str.print("$YXXDR,A,");
+        //pitch
+        char pBuf[7];
+        dtostrf(degrees(yprm[1]), 3, 1, pBuf);
+	str.print(pBuf); //prints 1 decimal, but round to degree, should be good enough
+	str.print(",D,PTCH,A,");
+	//roll
+        char rBuf[7];
+        dtostrf(degrees(yprm[2]), 3, 1, rBuf);
+        str.print(rBuf);
+        str.print(",D,ROLL,,,,,,,,*");
+
+	//calculate the checksum
+	int cs = 0; //clear any old checksum
+	for (unsigned int n = 1; n < strlen(xdrSentence) - 1; n++) {
+		cs ^= xdrSentence[n]; //calculates the checksum
+	}
+	str.print(cs, HEX); // Assemble the final message and send it out the serial port
+	Serial.println(xdrSentence);
+        
+}
+   
 
 void updateROT(){
   //executed every 0.2 secs
