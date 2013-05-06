@@ -24,6 +24,9 @@
 #include <Wire.h>
 #include <SPI.h>
 
+/**mag declination*/
+#define DECL  "DEC"
+
 volatile boolean execute = false;
 volatile int interval = 0;
 float q[4];
@@ -34,6 +37,8 @@ float ypr[3]; // yaw pitch roll
 float yprm[4]; // yaw, pitch, roll, mag heading
 char str[256];
 float val[9];
+float declination=0.0;
+String inputSerial = ""; // a string to hold incoming data
 
 typedef volatile float rval; //change float to the datatype you want to use
 const byte MAX_NUMBER_OF_READINGS = 5;
@@ -63,6 +68,7 @@ void calculate() {
 }
 
 void setup() {
+	inputSerial.reserve(40);
   Serial.begin(38400);
   Wire.begin();
   
@@ -76,7 +82,29 @@ void setup() {
   mghList.reset();
 }
 
+/*
+ SerialEvent occurs whenever a new data comes in the
+ hardware serial RX.  This routine is run between each
+ time loop() runs, so using delay inside loop can delay
+ response.  Multiple bytes of data may be available.
+ */
+void serialEvent() {
+	while (Serial.available()) {
+		// get the new byte:
+		char inChar = (char) Serial.read();
+		// add it to the inputString:
+		inputSerial += inChar;
+		if (inChar == '\n') {
+			//inputSerialComplete = true;
+			char carray[inputSerial.length() + 1]; //determine size of the array
+			inputSerial.toCharArray(carray, sizeof(carray));
+			process(carray, ',');
+			inputSerial = "";
+			//inputSerialComplete = false;
+		}
 
+	}
+}
 void loop() {
  
   if (execute) {
@@ -116,6 +144,51 @@ void loop() {
   
 }
 
+void process(char * s, char parser) {
+	//if (DEBUG) Serial.print("Process str:");
+	//if (DEBUG) Serial.println(s);
+	char *cmd = strtok(s, ",");
+	while (cmd != NULL && strlen(cmd) > 3) {
+		//starts with # its a command
+		//if (DEBUG) Serial.print("Process incoming..l=");
+		//if (DEBUG) Serial.print(strlen(cmd));
+		//if (DEBUG) Serial.print(", ");
+		//if (DEBUG) Serial.println(cmd);
+
+		char key[5];
+		int l = strlen(cmd);
+
+		if (cmd[0] == '#') {
+			//
+			strncpy(key, cmd, 4);
+			key[4] = '\0';
+			char valArray[l - 4];
+			memcpy(valArray, &cmd[5], l - 5);
+			valArray[l - 5] = '\0';
+			//if (DEBUG) Serial.print(key);
+			//if (DEBUG) Serial.print(" = ");
+			//if (DEBUG) Serial.println(valArray);
+
+		} else {
+			strncpy(key, cmd, 3);
+			key[3] = '\0';
+			char valArray[l - 3];
+			memcpy(valArray, &cmd[4], l - 4);
+			valArray[l - 4] = '\0';
+			//if (DEBUG) Serial.print(key);
+			//if (DEBUG) Serial.print(" = ");
+			//if (DEBUG) Serial.println(valArray);
+			
+			if (strcmp(key, DECL) == 0) {
+				declination= atof(valArray);
+			}
+		}
+		//next token
+		cmd = strtok(NULL, ",");
+	}
+	//if (DEBUG) Serial.println("Process str exit");
+}
+
 void printIMU(float h){
   //!!!VER:1.9,RLL:-0.52,PCH:0.06,YAW:80.24,IMUH:253,MGX:44,MGY:-254,MGZ:-257,MGH:80.11,LAT:-412937350,LON:1732472000,ALT:14,COG:116,SOG:0,FIX:1,SAT:5,TOW:22504700***
          
@@ -153,9 +226,11 @@ void printRateOfTurn(){
    char rotSentence [25];
 
 	PString str(rotSentence, sizeof(rotSentence));
-	str.print("$FBROT,");
-
-	str.print(rotList.getTotalAverage()); //prints 1 decimal, but round to degree, should be good enough
+	str.print("$TIROT,");
+        float r =rotList.getTotalAverage();
+        char rBuf[5];
+        dtostrf(r, 3, 1, rBuf);
+	str.print(rBuf); //prints 1 decimal, but round to degree, should be good enough
 	str.print(",A*");
 	
 	//calculate the checksum
@@ -198,10 +273,10 @@ void printRateOfTurn(){
 */
 void printNmeaMag(float h){
     //Assemble a sentence of the various parts so that we can calculate the proper checksum
-    char magSentence [30];
+    char magSentence [20];
 
 	PString str(magSentence, sizeof(magSentence));
-	str.print("$FBHDM,");
+	str.print("$HCHDM,");
 
 	str.print((int)h); //prints 1 decimal, but round to degree, should be good enough
 	str.print(".0,M*");
@@ -214,9 +289,80 @@ void printNmeaMag(float h){
 	}
 	str.print(cs, HEX); // Assemble the final message and send it out the serial port
 	Serial.println(magSentence);
+        //do HDT if we have a declination
+        if(declination!=0.0){
+            //print HDT
+            char hdtSentence [20];
+                PString str(hdtSentence, sizeof(hdtSentence));
+        	str.print("$HCHDT,");
+                float d = h-declination;
+                char dBuf[5];
+                dtostrf(d, 3, 1, dBuf);
+        	str.print(dBuf); 
+        	str.print(",T*");
+        	
+        	//calculate the checksum
+        
+        	int cs = 0; //clear any old checksum
+        	for (unsigned int n = 1; n < strlen(hdtSentence) - 1; n++) {
+        		cs ^= hdtSentence[n]; //calculates the checksum
+        	}
+        	str.print(cs, HEX); // Assemble the final message and send it out the serial port
+        	Serial.println(hdtSentence);  
+                
+                //and do HDG (Heading, Deviation and Variation)
+                /*
+                ------------------------------------------------------------------------------
+                        1   2   3 4   5 6
+                        |   |   | |   | |
+                 $--HDG,x.x,x.x,a,x.x,a*hh<CR><LF>
+                ------------------------------------------------------------------------------
+                
+                Field Number: 
+                
+                1. Magnetic Sensor heading in degrees
+                2. Magnetic Deviation, degrees
+                3. Magnetic Deviation direction, E = Easterly, W = Westerly, direction of magnetic north from true north.
+                4. Magnetic Variation degrees
+                5. Magnetic Variation direction, E = Easterly, W = Westerly
+                6. Checksum
+                
+                */
+                char hdgSentence [30];
+                float x = (abs(declination));
+                char xBuf[5];
+                dtostrf(x, 3, 1, xBuf);
+                //x=((int)(x*10))*0.1;
+                PString hdgStr(hdgSentence, sizeof(hdgSentence));
+        	hdgStr.print("$HCHDG,");
+                hdgStr.print(h);//mag heading 
+        	hdgStr.print(",");
+                hdgStr.print(xBuf);//declination
+                if(declination<0.0){
+                  hdgStr.print(",E,");
+                }else{
+                  hdgStr.print(",W,");
+                }
+                hdgStr.print(xBuf);//declination
+                if(declination<0.0){
+                  hdgStr.print(",E*");
+                }else{
+                  hdgStr.print(",W*");
+                }
+        	
+        	//calculate the checksum
+        
+        	cs = 0; //clear any old checksum
+        	for (unsigned int n = 1; n < strlen(hdgSentence) - 1; n++) {
+        		cs ^= hdgSentence[n]; //calculates the checksum
+        	}
+        	hdgStr.print(cs, HEX); // Assemble the final message and send it out the serial port
+        	Serial.println(hdgSentence);  
+                
+        }
+
   
 }
-
 
 void updateROT(){
   //executed every 0.2 secs
