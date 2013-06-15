@@ -1,7 +1,5 @@
 /**
  * FreeIMU library serial communication protocol
- * TODO: ROT 
- * Vessels Attitude ($xxXDR or $xxNTHPR) would be a great bonus!"
  *
 */
 
@@ -26,6 +24,13 @@
 
 /**mag declination*/
 #define DECL  "DEC"
+#define RAW_OUT "#RAW"
+#define IMU_OUT "#IMU"
+#define CAL_OUT "#CAL"
+#define NMEA_ON "#NMX"
+#define FREEBOARD_ON "#FBX"
+#define NMEA_OFF "#NMO"
+#define FREEBOARD_OFF "#FBO"
 
 volatile boolean execute = false;
 volatile int interval = 0;
@@ -38,6 +43,9 @@ float yprm[4]; // yaw, pitch, roll, mag heading
 char str[256];
 float val[9];
 float declination=0.0;
+bool raw_out=false;
+bool nmea_out=true;
+bool freeboard_out=true;
 String inputSerial = ""; // a string to hold incoming data
 
 typedef volatile float rval; //change float to the datatype you want to use
@@ -70,6 +78,7 @@ void calculate() {
 void setup() {
 	inputSerial.reserve(40);
   Serial.begin(38400);
+  //Serial.begin(115200);
   Wire.begin();
   
   my3IMU.init(true);
@@ -106,42 +115,69 @@ void serialEvent() {
 	}
 }
 void loop() {
- 
-  if (execute) {
-    //do these every 100ms
-    //quarternary, updates AHRS
-    my3IMU.getQ(q);
-    if (interval % 2 == 0) {
-      // do every 200ms
-          //mag 
-          my3IMU.getValues(val);
+  if(raw_out){
+         outputRaw(); 
+      }else if (execute) {
        
-          //convert to YPR
-          my3IMU.getYawPitchRollRad(yprm);
-          //convert to magnetic heading
-          calcMagHeading();
-          updateROT();
-          mghList.addValue(yprm[3]);
-    }
-    if (interval % 5 == 0) {
-	//do every 500ms
-         float h = degrees(mghList.getTotalAverage());
-          if(h<0.0){
-            h=(360.0+h);
-          }
-         //ArduIMU output format
-        printIMU(h);
-          //now do the NMEA version
+        //do these every 100ms
+        //quarternary, updates AHRS
+        my3IMU.getQ(q);
+        
+        if (interval % 2 == 0) {
+          // do every 200ms
+            //mag 
+            my3IMU.getValues(val);
          
-          printNmeaMag(h);
-          printRateOfTurn();
-          printPitchRoll();
+            //convert to YPR
+            my3IMU.getYawPitchRollRad(yprm);
+            //convert to magnetic heading
+            calcMagHeading();
+            updateROT();
+            mghList.addValue(yprm[3]);
+      }
+      if (interval % 5 == 0) {
+  	    //do every 500ms
+           float h = degrees(mghList.getTotalAverage());
+            if(h<0.0){
+              h=(360.0+h);
+            }
+           //ArduIMU output format
+            printIMU(h);
+            //now do the NMEA version
+           if(nmea_out){
+              printNmeaMag(h);
+              printRateOfTurn();
+              printPitchRoll();
+           }
         }
+   }
         
         execute = false;
   }
    
     
+ 
+void outputRaw(){
+  //uint8_t count = serial_busy_wait();
+     // for(uint8_t i=0; i<count; i++) {
+       // #if HAS_ITG3200()
+       //   my3IMU.acc.readAccel(&raw_values[0], &raw_values[1], &raw_values[2]);
+        //  my3IMU.gyro.readGyroRaw(&raw_values[3], &raw_values[4], &raw_values[5]);
+       // #else // MPU6050
+       //   my3IMU.accgyro.getMotion6(&raw_values[0], &raw_values[1], &raw_values[2], &raw_values[3], &raw_values[4], &raw_values[5]);
+       // #endif
+       // writeArr(raw_values, 6, sizeof(int)); // writes accelerometer and gyro values
+        #if IS_9DOM()
+          my3IMU.magn.getValues(&raw_values[0], &raw_values[1], &raw_values[2]);
+          //writeArr(raw_values, 3, sizeof(int));
+          Serial.print(raw_values[0]);
+          Serial.print(",");
+          Serial.print(raw_values[1]);
+          Serial.print(",");
+          Serial.println(raw_values[2]);
+        #endif
+        //Serial.println();
+      //}
   
 }
 
@@ -169,6 +205,60 @@ void process(char * s, char parser) {
 			//if (DEBUG) Serial.print(key);
 			//if (DEBUG) Serial.print(" = ");
 			//if (DEBUG) Serial.println(valArray);
+                       //used for calibration
+                        if (strcmp(key, RAW_OUT) == 0) {
+                           raw_out=true;
+                        }
+                        if (strcmp(key, IMU_OUT) == 0) {
+                           raw_out=false;
+                        }
+                        if (strcmp(key, FREEBOARD_ON) == 0) {
+                           freeboard_out=true;
+                        }
+                        if (strcmp(key, FREEBOARD_OFF) == 0) {
+                           freeboard_out=false;
+                        }
+                        if (strcmp(key, NMEA_ON) == 0) {
+                           nmea_out=true;
+                        }
+                        if (strcmp(key, NMEA_OFF) == 0) {
+                           nmea_out=false;
+                        }
+                        //get calibration
+                        if(strcmp(key, CAL_OUT) == 0){
+                           //my3IMU.magn.calibrate(1,75);
+                          Serial.print("acc offset: ");
+                          Serial.print(my3IMU.acc_off_x);
+                          Serial.print(",");
+                          Serial.print(my3IMU.acc_off_y);
+                          Serial.print(",");
+                          Serial.print(my3IMU.acc_off_z);
+                          Serial.print("\n");
+                          
+                          Serial.print("magn offset: ");
+                          Serial.print(my3IMU.magn_off_x);
+                          Serial.print(",");
+                          Serial.print(my3IMU.magn_off_y);
+                          Serial.print(",");
+                          Serial.print(my3IMU.magn_off_z);
+                          Serial.print("\n");
+                          
+                          Serial.print("acc scale: ");
+                          Serial.print(my3IMU.acc_scale_x);
+                          Serial.print(",");
+                          Serial.print(my3IMU.acc_scale_y);
+                          Serial.print(",");
+                          Serial.print(my3IMU.acc_scale_z);
+                          Serial.print("\n");
+                          
+                          Serial.print("magn scale: ");
+                          Serial.print(my3IMU.magn_scale_x);
+                          Serial.print(",");
+                          Serial.print(my3IMU.magn_scale_y);
+                          Serial.print(",");
+                          Serial.print(my3IMU.magn_scale_z);
+                          Serial.print("\n");
+                        }
 
 		} else {
 			strncpy(key, cmd, 3);
@@ -191,19 +281,20 @@ void process(char * s, char parser) {
 }
 
 void printIMU(float h){
-  //!!!VER:1.9,RLL:-0.52,PCH:0.06,YAW:80.24,IMUH:253,MGX:44,MGY:-254,MGZ:-257,MGH:80.11,LAT:-412937350,LON:1732472000,ALT:14,COG:116,SOG:0,FIX:1,SAT:5,TOW:22504700***
-         
-          Serial.print("!!!VER:1.9,UID:IMU,");
-          Serial.print("MGH:");
-          
-          Serial.print(h);
-          Serial.print(",YAW:");
-          Serial.print(degrees(yprm[0]));
-          Serial.print(",PCH:");
-          Serial.print(degrees(yprm[1]));
-          Serial.print(",RLL:");
-          Serial.print(degrees(yprm[2]));
-          Serial.println(","); 
+  //!!VER:1.9,RLL:-0.52,PCH:0.06,YAW:80.24,IMUH:253,MGX:44,MGY:-254,MGZ:-257,MGH:80.11,LAT:-412937350,LON:1732472000,ALT:14,COG:116,SOG:0,FIX:1,SAT:5,TOW:22504700***
+         if(freeboard_out){
+            Serial.print("!!VER:1.9,UID:IMU,");
+            Serial.print("MGH:");
+            
+            Serial.print(h);
+            Serial.print(",YAW:");
+            Serial.print(degrees(yprm[0]));
+            Serial.print(",PCH:");
+            Serial.print(degrees(yprm[1]));
+            Serial.print(",RLL:");
+            Serial.print(degrees(yprm[2]));
+            Serial.println(",");
+         } 
   
 }
 /*
