@@ -26,7 +26,8 @@
 #define DECL  "DEC"
 #define RAW_OUT "#RAW"
 #define IMU_OUT "#IMU"
-#define CAL_OUT "#CAL"
+#define CAL_OUT "CAL"
+#define CAL_SAVE "#CAL"
 #define NMEA_ON "#NMX"
 #define FREEBOARD_ON "#FBX"
 #define NMEA_OFF "#NMO"
@@ -158,25 +159,28 @@ void loop() {
     
  
 void outputRaw(){
-  //uint8_t count = serial_busy_wait();
-     // for(uint8_t i=0; i<count; i++) {
-       // #if HAS_ITG3200()
-       //   my3IMU.acc.readAccel(&raw_values[0], &raw_values[1], &raw_values[2]);
-        //  my3IMU.gyro.readGyroRaw(&raw_values[3], &raw_values[4], &raw_values[5]);
-       // #else // MPU6050
-       //   my3IMU.accgyro.getMotion6(&raw_values[0], &raw_values[1], &raw_values[2], &raw_values[3], &raw_values[4], &raw_values[5]);
-       // #endif
-       // writeArr(raw_values, 6, sizeof(int)); // writes accelerometer and gyro values
+  
+        #if HAS_ITG3200()
+          my3IMU.acc.readAccel(&raw_values[0], &raw_values[1], &raw_values[2]);
+          //my3IMU.gyro.readGyroRaw(&raw_values[3], &raw_values[4], &raw_values[5]);
+        #else // MPU6050
+          my3IMU.accgyro.getMotion6(&raw_values[0], &raw_values[1], &raw_values[2], &raw_values[3], &raw_values[4], &raw_values[5]);
+        #endif
+           Serial.print(raw_values[0]);
+          Serial.print(",");
+          Serial.print(raw_values[1]);
+          Serial.print(",");
+          Serial.print(raw_values[2]);
+          Serial.print(",");
         #if IS_9DOM()
           my3IMU.magn.getValues(&raw_values[0], &raw_values[1], &raw_values[2]);
-          //writeArr(raw_values, 3, sizeof(int));
           Serial.print(raw_values[0]);
           Serial.print(",");
           Serial.print(raw_values[1]);
           Serial.print(",");
-          Serial.println(raw_values[2]);
+          Serial.print(raw_values[2]);
         #endif
-        //Serial.println();
+        Serial.println();
       //}
   
 }
@@ -224,6 +228,38 @@ void process(char * s, char parser) {
                         if (strcmp(key, NMEA_OFF) == 0) {
                            nmea_out=false;
                         }
+                        //save calibration
+                        if (strcmp(key, CAL_SAVE) == 0) {
+                            const uint8_t eepromsize = sizeof(float) * 6 + sizeof(int) * 6;
+                            
+                            while(Serial.available() < eepromsize){
+                                Serial.print(".") ; // wait until all calibration data are received
+                            }
+                            EEPROM.write(FREEIMU_EEPROM_BASE, FREEIMU_EEPROM_SIGNATURE);
+                            for(uint8_t i = 1; i<(eepromsize + 1); i++) {
+                              EEPROM.write(FREEIMU_EEPROM_BASE + i, (char) Serial.read());
+                            }
+                            //my3IMU.calLoad(); // reload calibration
+                            // toggle LED after calibration store.
+                            digitalWrite(13, HIGH);
+                            delay(1000);
+                            digitalWrite(13, LOW);
+                            Serial.println("Saved calibration to EEPROM");
+                        }
+                        
+		} else {
+			strncpy(key, cmd, 3);
+			key[3] = '\0';
+			char valArray[l - 3];
+			memcpy(valArray, &cmd[4], l - 4);
+			valArray[l - 4] = '\0';
+			//if (DEBUG) Serial.print(key);
+			//if (DEBUG) Serial.print(" = ");
+			//if (DEBUG) Serial.println(valArray);
+			
+			if (strcmp(key, DECL) == 0) {
+				declination= atof(valArray);
+			}
                         //get calibration
                         if(strcmp(key, CAL_OUT) == 0){
                            //my3IMU.magn.calibrate(1,75);
@@ -259,20 +295,6 @@ void process(char * s, char parser) {
                           Serial.print(my3IMU.magn_scale_z);
                           Serial.print("\n");
                         }
-
-		} else {
-			strncpy(key, cmd, 3);
-			key[3] = '\0';
-			char valArray[l - 3];
-			memcpy(valArray, &cmd[4], l - 4);
-			valArray[l - 4] = '\0';
-			//if (DEBUG) Serial.print(key);
-			//if (DEBUG) Serial.print(" = ");
-			//if (DEBUG) Serial.println(valArray);
-			
-			if (strcmp(key, DECL) == 0) {
-				declination= atof(valArray);
-			}
 		}
 		//next token
 		cmd = strtok(NULL, ",");
