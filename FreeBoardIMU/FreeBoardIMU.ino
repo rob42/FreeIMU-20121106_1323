@@ -353,6 +353,8 @@ void printRateOfTurn(){
 	for (unsigned int n = 1; n < strlen(rotSentence) - 1; n++) {
 		cs ^= rotSentence[n]; //calculates the checksum
 	}
+	//bug - arduino prints 0x007 as 7, 0x02B as 2B, so we add it now
+	if (cs < 0x10) str.print('0');
 	str.print(cs, HEX); // Assemble the final message and send it out the serial port
 	Serial.println(rotSentence);
        
@@ -381,7 +383,7 @@ void printRateOfTurn(){
 */
 void printNmeaMag(float h){
     //Assemble a sentence of the various parts so that we can calculate the proper checksum
-    char magSentence [20];
+    char magSentence [25];
 
 	PString str(magSentence, sizeof(magSentence));
 	str.print("$HCHDM,");
@@ -395,12 +397,14 @@ void printNmeaMag(float h){
 	for (unsigned int n = 1; n < strlen(magSentence) - 1; n++) {
 		cs ^= magSentence[n]; //calculates the checksum
 	}
+	//bug - arduino prints 0x007 as 7, 0x02B as 2B, so we add it now
+	if (cs < 0x10) str.print('0');
 	str.print(cs, HEX); // Assemble the final message and send it out the serial port
 	Serial.println(magSentence);
         //do HDT if we have a declination
         if(declination!=0.0){
             //print HDT
-            char hdtSentence [20];
+            char hdtSentence [45];
                 PString str(hdtSentence, sizeof(hdtSentence));
         	str.print("$HCHDT,");
                 float d = h-declination;
@@ -415,6 +419,8 @@ void printNmeaMag(float h){
         	for (unsigned int n = 1; n < strlen(hdtSentence) - 1; n++) {
         		cs ^= hdtSentence[n]; //calculates the checksum
         	}
+        	//bug - arduino prints 0x007 as 7, 0x02B as 2B, so we add it now
+		if (cs < 0x10) str.print('0');
         	str.print(cs, HEX); // Assemble the final message and send it out the serial port
         	Serial.println(hdtSentence);  
                 
@@ -436,7 +442,7 @@ void printNmeaMag(float h){
                 6. Checksum
                 
                 */
-                char hdgSentence [30];
+                char hdgSentence [35];
                 float x = (abs(declination));
                 char xBuf[7];
                 dtostrf(x, 3, 1, xBuf);
@@ -464,6 +470,8 @@ void printNmeaMag(float h){
         	for (unsigned int n = 1; n < strlen(hdgSentence) - 1; n++) {
         		cs ^= hdgSentence[n]; //calculates the checksum
         	}
+        	//bug - arduino prints 0x007 as 7, 0x02B as 2B, so we add it now
+		if (cs < 0x10) str.print('0');
         	hdgStr.print(cs, HEX); // Assemble the final message and send it out the serial port
         	Serial.println(hdgSentence);  
                 
@@ -492,7 +500,7 @@ The fields in the B version of the XDR sentence are as follows:
 */
 void printPitchRoll(){
   
-   char xdrSentence [46];
+    char xdrSentence [65];
 
 	PString str(xdrSentence, sizeof(xdrSentence));
 	str.print("$YXXDR,A,");
@@ -505,13 +513,20 @@ void printPitchRoll(){
         char rBuf[7];
         dtostrf(degrees(yprm[2]), 3, 1, rBuf);
         str.print(rBuf);
-        str.print(",D,ROLL,,,,,,,,*");
+        str.print(",D,ROLL,A,");
+	//yaw
+        char yBuf[7];
+        dtostrf(degrees(yprm[3]), 3, 1, yBuf);
+        str.print(yBuf);
+        str.print(",D,YAW*");
 
 	//calculate the checksum
 	int cs = 0; //clear any old checksum
 	for (unsigned int n = 1; n < strlen(xdrSentence) - 1; n++) {
 		cs ^= xdrSentence[n]; //calculates the checksum
 	}
+	//bug - arduino prints 0x007 as 7, 0x02B as 2B, so we add it now
+	if (cs < 0x10) str.print('0');
 	str.print(cs, HEX); // Assemble the final message and send it out the serial port
 	Serial.println(xdrSentence);
         
