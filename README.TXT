@@ -8,7 +8,7 @@ The FreeboardIMU sketch is basically the same as FreeIMU_serial.ino. It responds
 
 To use:
 
-Download the  and install and calibrate with the freeboard-installer (https://github.com/rob42/freeboard-installer)
+Download the FreeBoardIMU.cpp.hex above, install and calibrate with the freeboard-installer (https://github.com/rob42/freeboard-installer)
 
 To develop:
 
