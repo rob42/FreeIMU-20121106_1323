@@ -2,9 +2,18 @@ README
 
 This is a slightly modified version of the FreeIMU code from http://www.varesano.net/projects/hardware/FreeIMU 
 
-The mods are to FreeIMU_serial/FreeIMU_serial.ino, and add a default output of compass heading, yaw,roll,and pitch in a useful format for FreeBoard. 
-The FreeboardIMU sketch is the same as FreeIMU_serial.ino, but without the ability to use the FreeIMU calibration routime. Basically it does not respond to commands, which were causing problems when Freeboard sent data to the IMU.
+The mods are to FreeIMU_serial/FreeIMU_serial.ino, and add a default output of compass heading,  yaw,roll,and pitch in a useful format for FreeBoard. It also outputs the equivalent NMEA sentences for other devices.
 
-Use the Arduino IDE 1.02, and open the FreeIMU_serial project. Build and deploy to your ArduIMU v3. Then calibrate. Then delpoy the FreeBoardIMU project to the board before you use it in FreeBoard.
+The FreeboardIMU sketch is basically the same as FreeIMU_serial.ino. It responds to different commands, to suit freeboards needs, and calibration process.
 
-***The ArduIMU will NEED calibration to provide stable output. Believe me there is no point in struggling on without doing the calibration (as per the FreeIMU site), you just get rubbish output and waste weeks (!*&%^$!).
+To use:
+
+Download the  and install and calibrate with the freeboard-installer (https://github.com/rob42/freeboard-installer)
+
+To develop:
+
+Clone the project and use your favorite C/C++ editer to edit.
+
+Use the Arduino IDE 1.52 to build and delpoy the FreeBoardIMU project to the ArduIMU. Then use the freeboard-installer to calibrate.
+
+***The ArduIMU will NEED calibration to provide stable output. Believe me there is no point in struggling on without doing the calibration, you just get rubbish output and waste weeks (!*&%^$!).
