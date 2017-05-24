@@ -45,7 +45,7 @@ char str[256];
 float val[9];
 float declination=0.0;
 bool raw_out=false;
-bool nmea_out=true;
+bool nmea_out=false;
 bool freeboard_out=true;
 String inputSerial = ""; // a string to hold incoming data
 
